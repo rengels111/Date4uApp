@@ -1,0 +1,56 @@
+DI - Mehrere Abhängigkeiten
+
+- Eine managed Bean kann mehrere Komponenten injiziert bekommen.
+- Eine Komponente (Bean) braucht andere Referenzen (Beans), um vollständig arbeiten zu können.
+- Eine Besonderheit gibt es hier bei der Setter Injection:
+    - Eine @Autowired Methode kann einen beliebigen Namen erhalten (muss nicht set heißen)
+    - Sie kann mehrere Komponenten als Parameter (Beans) empfangen
+
+
+- Eine @Autowired Komponente funktioniert nur, wenn wir uns wirklich eine Komponente wünschen. D.h. Die Methode muss
+eine weitere Bean wünschen (benennen), sonst entsteht eine Exception.
+
+
+Optionale Abhängigkeiten
+- Optionale Abh. sind am besten als Setter-Injection zu benutzen
+
+Option 1: Annotationsattribut
+@Autowired(required = false)
+Thumbnail maybeThumbnail;
+
+Options 2: @Nullable
+@Autowired @Nullable Thumbnail maybeThumbnail;
+
+Option 3: Einsatz von Optional
+@Autowired Optional<Thumbnail> maybeThumbnail;
+
+Option 4: ObjektProvider
+@Autowired ObjectProvider<Thumbnail> maybeThumbnail;
+    - optionale Beans und Mehrdeutigkeiten
+
+
+Zyklische Abhängigkeiten
+- sind standardmäßig nicht erlaubt
+Beispiel:
+@Component class A { @Autowired B b; }
+@Component class B { @Autowired A a; }
+A braucht B und B braucht A
+-> Dies führt zu einer Ausnahme
+
+Falls man diese Abhängigkeit wirklich benötigt, lässt sie sich notfalls erlauben:
+- spring.main.allow-circular-references auf true setzen
+- Setter nutzen
+- @Lazy-Annotation bei @Autowired einsetzen
+
+
+Andere Dinge injizieren
+- Neben den eigenen Komponenten lassen sich vordefinierte Komponenten injizieren. Zum Beispiel den Kontext selbst:
+@Autowired
+ApplicationContext applicationContext;
+
+- Andere wären z.B.: BeanFactory, Environment, ResourceLoader, ApplicationEventPublisher und MessageSource bzw. deren
+konkrete Untertypen wie ConfigurableApplicationContext oder ResourcePatternResolver.
+-Allerdings sollte man sich hier keine Spring-managed Beans 'holen', denn das ist das Gegenteil von der Spring-
+Philosophie: "wollen und sich geben lassen".
+-> ich glaube damit ist gemeint, dass man diese Komponenten nicht zusätzlich injizieren muss. Man muss sie sich nur
+'wünschen' mit DI geben lassen als Parameter zum passenden Bean.

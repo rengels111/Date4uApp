@@ -1,0 +1,101 @@
+
+@ComponentScan ist eine Annotation aus dem Spring Framework.
+Diese Annotation wird verwendet, um Spring zu informieren, in welchem Paket es nach Spring-Komponenten suchen soll.
+Spring-Komponenten sind normalerweise mit Annotationen wie @Component, @Service, @Repository oder @Controller
+gekennzeichnet.
+
+@ComponentScan steuert, dass standardmäßig in dem Paket der annotierten Konfigurationsklasse, inklusive aller
+Unterpakete, @Component-annotierte Typen eingesammelt werden.
+- @ComponentScan ist nur an einer @Configuration erlaubt.
+- In welcher Klasse die main(...)-Methode steht ist unbedeutend.
+
+Beispiel:
+
+@Configuration
+@ComponentScan(basePackages = "com.example.myapp")
+public class AppConfig {
+    // Konfigurationsdetails hier
+}
+
+In diesem Beispiel wird @ComponentScan verwendet, um Spring anzuweisen, nach Spring-Komponenten im Paket
+"com.example.myapp" und seinen Unterpaketen zu suchen.
+Alle Klassen, die mit @Component, @Service, @Repository oder @Controller annotiert sind oder von diesen Klassen erben,
+werden von Spring erkannt und als Beans im Kontext der Anwendung registriert.
+
+Diese Funktion ist besonders nützlich in größeren Spring-Anwendungen, da sie die Konfiguration erleichtert und die
+Notwendigkeit verringert, jede Bean einzeln in einer Konfigurationsklasse zu registrieren.
+
+
+basePackages
+Über basePackages lassen sich Wurzelverzeichnisse für das Classpath-Scanning setzen.
+    - Fehlt die Angabe, bildet das Paket von der @ComponentScan annotierten Klasse die Wurzel.
+
+Folgende Schreibweisen sind möglich:
+
+@Configuration
+@ComponentScan( basePackages = { "com.tutego.date4u.core", "com.tutego.date4u.interfaces" } )
+
+@Configuration
+@ComponentScan( { "com.tutego.date4u.core", "com.tutego.date4u.interfaces" } )
+
+@Configuration
+@ComponentScan( "com.tutego.date4u.core", "com.tutego.date4u.interfaces" )
+
+@Configuration
+@ComponentScan( { "com.tutego.date4u.core com.tutego.date4u.interfaces" } )
+
+
+basePackageClasses
+Strings bei basePackages sind schlecht für das Refactoring.
+Mit basePackageClasses lässt sich ein Array von Typen angeben, dessen Pakete die Wurzeln für das Classpath-Scanning
+bilden.
+
+Beispiel:
+
+@Configuration
+@ComponentScan( basePackageClasses = { A.class, B.class } )
+
+Lege extra für basePackageClasses leere Typen in das Paket:
+package com.tutego.date4u.core;
+public interface CoreModule { }
+
+Dann später:
+@ComponentScan( basePackageClasses = { CoreModule.class } )
+
+
+includeFilters und excludeFilters
+Wurden bei @ComponentScan Wurzelpakete ausgewählt, lassen sich im zweiten Schritt über
+    - includeFilters gezielt Typen einschließen und mit
+    - excludeFilters gezielt Typen ausschließen.
+
+Da standardmäßig @ComponentScan alle @Component-Typen einbindet, kann man für includeFilters die automatische Erkennung
+mit einem Annotationsattribut abschalten:
+useDefaultFilters = false
+
+Diese Filter sind geschachtelte Typen im Annotations-Typ @ComponentScan:
+@ComponentScan.Filter
+- Der Filter enthält einen FilterType zum Filtern nach z.B. Basistypen, Regex-Ausdrücken, gesetzte Annotationen.
+- Der Standard ist FilterType.ANNOTATION.
+
+Beispiel:
+Ich möchte nur die Komponenten aufnehmen, die Thumbnail als Basistypen haben:
+
+@Configuration
+@ComponentScan(
+    useDefaultFilters = false,
+    includeFilters = @ComponentScan.Filter(
+    type = FilterType.ASSIGNABLE_TYPE,  // (mit Assignable Type werden alle Klassen aufgenommen, auch wenn sie nicht mit
+    // @Component annotiert wurden.)
+    classes = Thumbnail.class ) )
+class ThumbnailScanner { }
+
+
+Beispiel für excludeFilters:
+
+@Configuration
+@ComponentScan(
+    // useDefaultFilters = false,
+    excludeFilters = @ComponentScan.Filter(
+    type = FilterType.ASSIGNABLE_TYPE,
+    classes = AwtBicubicThumbnail.class ) )
+class ThumbnailScanner { }

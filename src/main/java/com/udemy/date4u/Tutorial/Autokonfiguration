@@ -1,0 +1,323 @@
+Autokonfiguration
+
+@Conditional und Condition
+Das Spring Framework kann in Abhängigkeit von Bedingungen managed Beans erzeugen.
+
+Eine Implementierung von
+org.springframework.context.annotation.Condition realisiert die Bedingung:
+
+public class MyCondition implements Condition {  // mit der Schnittstelle "Condition" lässt sich diese Bedingung
+    // mit deren Methode "matches" realisieren.
+
+    @Override public boolean matches( ConditionContext context, AnnotatedTypeMetadata metadata ) {
+        return ...
+    }
+}
+
+1. Wir erzeugen also erstmal eine Klasse mit der Schnittstelle "Condition".
+2. Überschreiben dort die Methode "matches", die einen Wahrheitswert zurückgibt. Dort definieren wir die Bedingungen.
+3. Mit der Annotation org.springframework.context.annotation.Conditional geben wir dann einen Typ-Token für die
+Bedingung an. Gilt die Bedingung, dann wird eine Spring-managed Bean erzeugt:
+@Bean @Conditional( MyCondition.class )  // bei Fabrikmethoden
+oder
+@Component @Conditional( MyCondition.class )  // bei Komponenten
+
+-> Annotation @Conditional erfolgt direkt nach der Annotation für die Bean (@Bean / @Component).
+
+- Es können alle möglichen Bedingungen festgelegt werden.
+Z.B.:
+- ob Windows oder Linux genutzt wird
+- ob eine Internetverbindung besteht
+- ob Chrome oder Firefox genutzt wird
+- ob wir einen Vibrationssensor haben
+- usw.
+
+Siehe Beispiel LowDiskSpaceCondition.java.
+
+Die Rückgabe dieser Variable ist dann interessant, wenn wir z.B. auf andere Beans im Container zurückgreifen wollen oder
+auf Properties, die in Application Properties stehen oder auf der Kommandozeile übergeben wurden.
+
+Die Klasse LowDiskSpaceCondition können wir nun mit der Annotation @Conditional benennen:
+
+@Component
+@Conditional( LowDiskSpaceCondition.class )  // Ich gebe den entsprechenden Typ-Token an.
+class TempCleaner {
+
+    private final Logger log = LoggerFactory.getLogger( getClass() );  // Logger wird hinzugefügt
+
+    TempCleaner() {
+        log.info( "Cleaning temp directory to acquire more free disk space" );  // Ohne Implementierung der Funktion,
+        // Da dies nur die Funktion @Conditional erklären soll.
+    }
+}
+
+
+@Conditional(LowDiskSpaceCondition.class ) enthält zwei Informationen:
+@Conditional + LowDiskSpaceCondition.
+Jetzt kann ich diese Annotation sogar zu einer neuen Composed Annotation programmieren/zusammenfassen, die beides das
+enthält:
+
+import org.springframework.context.annotation.Conditional;
+import java.lang.annotation.*;
+
+@Retention( RetentionPolicy.RUNTIME )
+@Target( { ElementTYPE, ElementType.METHOD } )
+@Documented
+@Conditional( LowDiskSpaceCondition.class )
+public @interface ConditionalOnLowDiskSpace {
+}
+
+Damit kann ich dies zusammengefasst so annotieren:
+
+@ConditionOnLowDiskSpace
+class TempCleaner { ... }
+
+
+In der Praxis ist es nun so, dass einige Fragen immer wieder auftauchen, wie z.B.:
+- existiert eine Property?
+- existiert eine Bean?
+- welche Java Version?
+usw.
+
+-> Deshalb hat sich Spring Boot entschieden einige Standards einzufügen, sodass man die häufigen Fälle nicht selbst
+als Conditional-Implementierung realisieren muss.
+-> Das Paket org.springframework.boot.autoconfigure.condition hat einige vordefinierte @ConditionalOn Composed
+Annotationen ergänzt:
+- ConditionalOnProperty: Ist eine gewisse Property gesetzt und hat sie den Wert x?
+- ConditionalOnBean: Existiert bereits eine Bean von dem Typ? Dann soll eine weitere davon kreiert werden.
+- ConditionalOnMissingBean: Fehlt eine gewisse Bean, dann wird der matcher aktiviert und diese Bean wird instanziiert.
+- ConditionalOnClass: Wenn eine gewisse Klasse im Klassenpfad ist, dann wird eine Bean erzeugt.
+- ConditionalOnMissingClass: Das Gegenteil davon.
+- ConditionalOnSingleCandidate: Wenn es einen einzigen Kandidaten gibt, der matched, wird eine Bean erzeugt.
+- ConditionalOnExpression: Wenn eine gewisse Expression aus der Spring Expression Language vorhanden ist, wird eine Bean
+erzeugt.
+- ConditionalOnJava: Dient dazu verschiedene Java-Versionen abzufragen.
+- ConditionalOnJndi
+- ConditionalOnWebApplication, ConditionalOnNotWebApplication: Befinden wir uns in einer bestimmten Web-Anwendung?
+- ConditionalOnResource: Ist eine gewisse Resource vorhanden?
+- ConditionalOnCloudPlattform: Ich kann verschiedene Cloud Plattformen abfragen, ob sie vorhanden sind.
+- ConditionalOnWarDeployment: Prüft ob wir ein traditionelles war Deployment z.B. für einen Servlet-Container haben.
+Wenn wir einen embedded Server nutzen, wird diese Condition "false" ergeben.
+
+Es gibt noch weitere Autokonfigurationen, die von anderen Spring Paketen kommen.
+Z.B. ConditionalOnAvailableEndPoint oder ob eine Default Security vorhanden ist, ob ein Health Indicator vorhanden ist,
+ob Metriken exportiert sind, usw.
+
+Informationen zu den Conditional Annotationen und allen weiteren Spring Boot Bibliotheken finden wir unter:
+https://docs.spring.io/spring-boot/docs/current/api/index.html
+
+
+Beispiel mit @ConditionalOnProperty:
+@Bean
+@ConditionalOnProperty( name="user.name", havingValue="Christian" )  // In der Dokumentation finden wir verschiedene
+// Parameter, wie name, prefix, havingValue, usw.
+// Wir können Parameter übernehmen, welche wir für die Bedingungen benötigen und diese auf die create Methode anwenden:
+public Bean create() { ... }  // Falls der Username Christian in der Property vorhanden ist, wird die create Methode
+ausgelöst.
+
+Das lässt sich auch auf @Component anwenden:
+@Component
+@ConditionalOnProperty( name="user.name", havingValue="Christian" )
+public class ChrisIsThere { ... }
+
+
+Beispiel mit @ConditionalOnMissingBean:
+Wir schauen uns ein Beispiel aus der Klasse JLineShellAutoConfiguration an:
+Diese Klasse ist mit @AutoConfiguration annotiert. Das ist eine besondere Configuration und das ist nur angebracht,
+wenn diese Klassen nur Fabrikmethoden haben.
+
+@Bean
+@ConditionalOnMissingBean({PromptProvider.class})  // Bedingung: Wenn eine Bean dieser PromptProvider-Klasse noch nicht
+// existiert, dann wird diese Methode ausgeführt.
+public PromptProvider promptProvider() {
+    return () -> {
+        return new AttributedString("shell:>", AttributedStyle.DEFAULT.foreground(3));
+    };
+}
+
+
+Autokonfiguration - Die Magie bei Spring Boot
+- Spring Boot erzeugt viele Beans automatisch. Das verleiht dem Framework eine gewisse Magie.
+- Grund dafür sind eine Menge von an @Conditional geknüpfte Spring-managed Beans. Wenn diese speziellen Bedingungen
+zutreffen, löst das bestimmte Aktionen aus. Diesen Prozess nennen wir Autokonfiguration.
+- Wenn z.B. Tomcat im Klassenpfad ist, wird automatisch ein Webserver gestartet.
+- Das ist einer der fundamentalen Unterschiede zwischen Spring Boot und dem Spring Framework:
+    - Das Spring Framework kennt sowas nicht. Es schaut nicht überall nach und macht daraufhin etwas.
+    - Bei Spring Boot hingegen gibt es massenweise solcher Vorgehensweisen: Ich schaue mal nach und mache dann dies oder
+    das. (Condition...)
+
+- Unter https://docs.spring.io/spring-boot/docs/current/api/ finden wir massenweise Einträge zu Autokonfigurationen.
+
+
+Beispiel MongoAutoConfiguration
+org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+
+@AutoConfiguration  // *1
+@ConditionalOnClass( MongoClient.class )  // *2
+@EnableConfigurationProperties( MongoProperties.class )
+@ConditionalOnMissingBean( "org.springframework.data.mongodb.MongoDatabaseFactory" )
+public class MongoAutoConfiguration  // *3
+    @Bean
+    @ConditionalOnMissingBean( MongoClient.class )  // *4
+    public MongoClient mongo(...) { ... }
+}
+
+*1 @AutoConfiguration annotiert alle Autokonfigurationsklassen.
+*2 Diese Autokonfiguration soll nur laufen, wenn MongoClient im Klassenpfad ist.
+*3 Die Klassen sind public, damit man sie bei der Autokonfiguration ausschließen kann, aber auf die Inhalte sollte man
+nie zugreifen.
+*4 Bean soll nicht aufgebaut werden, wenn MongoClient schon als Spring-managed Bean existiert.
+
+-> Auf der einen Seite gibt es hier also die ConditionalOn-Annotationen an den Datentyp, an einer Komponente und
+auf der anderen Seite die Annotationen an einer Fabrikmethode.
+
+
+- Die Autokonfigurationen sind reguläre Komponenten, werden jedoch nicht durch das ClasspathScanning erkannt.
+- Würden wir solche @AutoConfiguration benutzen, würden die sehr wohl vom ClasspathScanning erkannt werden, denn
+Spring Boot nutzt für die Autokonfigurationen eine etwas andere Technik.
+-> Der Spring Boot Starter referenziert nämlich auf die spring-boot-autoconfigure Dependency und dort gibt es ein
+besonderes META-INF Verzeichnis. Dieses hat ein Unterverzeichnis "spring" und dort gibt es die Datei:
+org.springframework.boot.autoconfigure.AutoConfiguration.imports.
+- Der Dateiname ist recht lang, da er sich aus dem vollqualifizierten Typnamen der Annotation:
+org.springframework.boot.autoconfigure.AutoConfiguration und die Dateiendung ist .imports.
+- Diese Datei enthält viele Zeilen mit Autokonfigurationen (z.B. ist auch die MongoAutoConfiguration dort enthalten).
+-> Diese Autokonfigurationen werden nicht über das ClasspathScanning gefunden, sondern weil diese Datei von Spring Boot
+geöffnet wird und nach der Reihe abgearbeitet wird und alle Autokonfigurationen werden angemeldet.
+
+-> So würde man auch vorgehen, wenn man eigene Starter mit eigenen Autokonfigurationen schreiben würde.
+- Denn die Idee eines Starters ist es ja, dass gewisse Dinge vorkonfiguriert werden und uns auch nicht im Weg stehen,
+wenn wir diese Komponenten bauen würden.
+- Vor Spring Boot 2.7 wurde mit der Datei spring.factories im META-INF Ordner gearbeitet und diese wird aus
+Kompatibilitätsgründen weiterhin ausgewertet. Der moderne Weg ist jedoch über diese AutoConfiguration.imports Datei.
+
+
+Autokonfigurationen werden annotiert mit @AutoConfiguration
+- Im Grunde ist das erstmal eine reguläre @Configuration, mit der Einschränkung, dass die "proxyBeanMethods = false" ist.
+@Configuration( proxyBeanMethods = false )
+-> Das bedeutet, das Spring keinen Untertyp bauen wird.
+- Wenn man sich den Annotationstyp genauer anschaut, kann man im Wesentlichen ablesen, dass es hier darum geht mit
+den Methoden before(), beforeName(), after() oder afterName() auszudrücken ob diese Autokonfiguration vor oder nach
+anderen Autokonfigurationen ausgeführt und initialisiert werden soll.
+
+
+Und / Oder Verknüpfungen von Autokonfigurationen
+- Sind mehrere @Conditional gesetzt, so müssen alle Bedingungen erfüllt sein, damit die Spring-managed Bean aufgebaut
+wird. (Siehe oben MongoConfiguration -> @ConditionalOnClass & @ConditionalOnMissingBean)
+
+- Es ist jedoch auch möglich Konditionen in Autokonfigurationen in einer Oder-Verknüpfung zu verbinden:
+    -Das ist möglich mit der abstrakten Klasse "AnyNestedCondition", von der man seine Klasse erweitern kann.
+    - Dafür muss auch eine weitere Annotation drangesetzt werden:
+    Beispiel:
+    @Configuration
+    @Conditional( AdminAutoConfiguration.AdministratorOrChrisPropertyAvailableCondition.class )
+    public class AdminAutoConfiguration {
+        AdminAutoConfiguration() { /* user.name = "christian" | "Administrator" */}
+
+        static final class AdministratorOrChrisPropertyAvailableCondition extends AnyNestedCondition {
+            AdministratorOrChrisPropertyAvailableCondition() {
+                super (ConfigurationPhase.PARSE_CONFIGURATION );
+            }
+            // Hier kommen dann die Oder Konditionen rein:
+            @ConditionalOnProperty(name = "user.name", havingValue = "Administrator")
+            static class UserNameIsAdministrator {
+            }
+            // Oder:
+            @ConditionalOnProperty(name = "user.name", havingValue = "christian")
+            static class UserNameIsChristian {
+            }
+        }
+    }
+-> Wenn der Username Administrator oder Christian ist, dann wird diese AdminAutoConfiguration aktiviert.
+
+
+Ein Problem in der Praxis ist, dass einem nicht unbedingt klar ist, welche Autokonfigurationen überhaupt aktiviert
+werden und welche nicht.
+-> Daher gibt es eine besondere Möglichkeit alle Autokonfigurationen anzuzeigen, indem man die Property "debug" setzt:
+Verschiedene Möglichkeiten:
+    - Auf der Kommandozeile: --debug oder -Ddebug
+    - Im Code: SpringApplication.run(*.class, "--debug");(Hack)
+    - In application.[properties|yaml]:debug=true/debug: true
+- Wenn man noch mehr Informationen haben möchte, setzt man statt debug die Property trace.
+
+- In unserem Fall testen wir das mal mit der application.properties Datei und tragen dort ein:
+debug=true
+-> Wenn wir das Programm nun starten, sehen wir in der Konsole eine Ausgabe, die mit "Conditions Evaluation Report"
+startet.
+-> Dann erhalten wir Positive matches: Es wird aufgezählt welche Conditions "true" waren, welche Beans erzeugt wurden.
+-> Dann erhalten wir Negative matches: Welche Conditions nicht ge-matched haben.
+-> Dann erhalten wir noch Exclusions.
+-> Und zuletzt noch Unconditional classes.
+Diese beiden können wir erstmal ignorieren.
+
+
+@SpringBootApplication hat @EnableAutoConfiguration
+- Der Grund warum die Autokonfigurationen überhaupt berücksichtigt werden, liegt an der Annotation @EnableAutoConfiguration
+in der @SpringBootApplication.
+- @EnableAutoConfiguration konfiguriert Spring automatisch anhand der Typen im Klassenpfad oder weiteren Bedingungen.
+- Umgekehrt: Wenn wir nicht wollen würden, dass SpringBoot Autokonfigurationen nutzt, dann würden wir die Annotation
+@SpringBootApplication nicht nutzen, sondern nur:
+@SpringBootConfiguration und @ComponentScan.
+
+
+Autokonfigurationen ausschließen
+- Die Autokonfiguration führt zu leicht erhöhter Startzeit
+- und zu Spring managed Beans, die nicht unbedingt nötig sind und vielleicht Konflikte verursachen.
+
+- Autokonfigurationen lassen sich daher exkludieren:
+    Intern:
+    Ich kann dieser Annotation ein Array an Klassen übergeben, die exkludiert werden sollen:
+    @EnableAutoConfiguration( exclude = { DataSourceAutoConfiguration.class,
+    DataSourceTransactionManagerAutoConfiguration.class, HibernateJpaConfiguration.class } )
+    -> Hierbei würden wir gewisse Klassen rund um Datenbanken abschalten.
+
+    - Eine zweite Möglichkeit Autokonfigurationen auszuschließen kann extern über application.properties erfolgen:
+        Entweder:
+        spring.autoconfigure.exclude=
+        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,
+        DataSourceTransactionManagerAutoConfiguration.class,
+        ...
+
+        Oder (den Index des Arrays angeben und dahinter den Klassennamen):
+        spring.autoconfigure.exclude[0]=
+        [...].autoconfigure.jdbc.DataSourceAutoConfiguration
+        spring.autoconfigure.exclude[1]=
+        [...].autoconfigure.jdbc.DataSource...
+        ...
+        - Welche Schreibweise genutzt wird ist Geschmackssache.
+
+
+Wenn man alle Autokonfigurationen abschaltet (@SpringBootApplication ersetzen durch @SpringBootConfiguration und
+@ComponentScan und den dritten Teil weglassen: @EnableAutoConfiguration), dann kann man auch manuell festlegen welche
+Autokonfigurationen verwendet werden sollen und zwar mit der @Import Annotation:
+
+@Configuration
+@Import( {  // Wir geben ein Array an Klassen an, die genau diese Autokonfigurationen enthalten, die wir brauchen.
+    PropertyPlaceholderAutoConfiguration.class,
+    DispatcherServletAutoConfiguration.class,
+    ...
+    }
+}
+public class WebConfiguration { }
+
+
+Weitere Möglichkeiten die Startzeit von Spring Boot zu reduzieren:
+- Component Index
+- Functional Bean Definitions
+
+-> Jedoch ergeben Messungen, dass es sich bei den Optimierungen um Millisekunden handelt, daher kann dies auch
+vernachlässigt werden.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

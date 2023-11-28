@@ -1,0 +1,183 @@
+Lebenszyklus der Beans
+- Eine Spring-managed Bean wird automatisch aufgebaut wenn:
+    - der Typ mit @Component annotiert wird
+    - es eine @Bean-Methode gibt
+
+- Durch Constructor-Injection ergibt sich eine explizite Abhängigkeit, dass eine Komponente vor einer anderen Komponente
+aufgebaut werden muss.
+    - Dadurch ändert sich die Reihenfolge der aufgebauten Spring managed Beans.
+
+
+@DependsOn
+- Mit @DependsOn lassen sich eine oder mehrere Beans vor der eigenen Bean initialisieren:
+@DependsOn( { "aBean", "anotherBean" } )
+- Wenn ich @Autowired verwende, brauche ich natürlich kein @DependsOn. Falls jedoch eine Abhängigkeit erzeugt werden
+soll, bei der kein Autowired verwendet werden soll, dann bietet sich DependsOn an.
+
+- Nehmen wir an, das FileSystem muss vor dem FileWatcher initialisiert werden:
+    - @DependsOn als Typ-Annotation:
+        @Component @DependsOn( "fileSystem" )
+        class FileWatcher
+
+    - @DependsOn als Methoden-Annotation:
+        @Bean @DependsOn( "fileSystem" )
+        FileWatcher fileWatcher() { ... }
+
+Probleme mit @DependsOn
+- Namen der Spring managed Beans sind als String im Code (Tippfehler möglich -> NoSuchBeanDefinitionException)
+- Während bei Constructor-Injection eine Abhängigkeit deutlich aufgezeigt wird, so ist sie bei @DependsOn lediglich
+deklarativ.
+    -> Bei der Implementierung von Testfällen muss diese versteckte abhängige Komponente ggf. zuerst aufgebaut werden.
+
+
+Verzögerte Initialisierung (lazy initialization)
+- Singletons werden immer erzeugt, auch wenn sie nicht injiziert oder aus dem Kontext erfragt werden.
+    - Es gibt in Spring auch Prototypen, die bei jeder Anfrage neu erzeugt werden, das ist jedoch etwas anderes.
+- Werden alle Komponenten zum Start aufgebaut, ist die Startzeit höher, aber Fehler fallen früh auf.
+- Der Vorteil liegt also darin, dass wenn alle Beans im Container am Anfang aufgebaut sind, dann kann man davon ausgehen,
+dass keine weiteren Fehler auftauchen werden.
+
+- Spring erlaubt eine verzögerte Initialisierung (lazy initialization), die Komponenten erst dann aufbaut, wenn sie
+wirklich benötigt werden.
+- Verzögerte Initialisierung verbessert die Startzeit, aber Fehler fallen erst spät auf.
+    - Beim Test/Development ist die verzögerte Initialisierung ein Vorteil (da wir zum Testen das Programm häufig
+    starten und die Startzeit somit ins Gewicht fällt), beim Release-Produkt eher nicht.
+
+- Mit der Annotation @Lazy lässt sich eine verzögerte Initialisierung lokal für eine Spring managed Bean deklarieren:
+
+@Lazy @Component
+class FileSystem { ... }
+// -> falls die Komponente bei keiner anderen Bean zur Laufzeit benötigt wurde, dann wird es solange auch nicht
+// hochgefahren. Erst wenn das FileSystem z.B. durch @Autowired aufgerufen wird, dann wird diese Komponente aufgebaut.
+
+@Lazy @Bean
+UUID appUuid() { ... }
+// -> Auch hier das gleiche: Wenn sich niemand für diese Bean interessiert, dann wird diese Fabrikmethode auch nicht
+// aufgerufen.
+
+- Steht @Lazy an eine @Configuration-Klasse, so ist das wie ein @Lazy an jeder @Bean-Methode (gilt für alle dazugehörigen
+Beans).
+- Falls ich zum Beispiel den Quellcode nicht habe und an bestimmte Komponenten nicht drankomme, so kann ich die
+Annotation @Lazy auch an @Autowired oder @Inject anhängen. Auch dann wird die Komponente verzögert initialisiert.
+    - Intern setzt Spring dafür einen Proxy ein, um herauszufinden, ob es dafür einen ersten Zugriff gab.
+
+Globale verzögerte Initialisierung
+- @Lazy funktioniert lokal bei der jeweiligen annotierten Komponente, jedoch gibt es eine Möglichkeit global alles auf
+lazy zu setzen:
+- Spring Boot bietet eine Konfigurations-Property, die alles lazy macht:
+spring.main.lazy-initialization auf true setzen.
+
+- Die verzögerte Initialisierung kann auch programmatisch gesetzt werden:
+    - SpringApplication:setLazyInitialization(true)
+    - SpringApplicationBuilders:lazyInitialization(true)
+
+- Die verzögerte Initialisierung lässt sich dann wieder für bestimmte Spring-managed Beans mit @Lazy(false) deaktivieren.
+    - Das gilt auch, wenn @Lazy an der @Configuration steht.
+
+
+Bean-Initialisierung traditionell
+Eine Spring-managed Bean ist eine übliche Java-Klasse mit typischer Initialisierung:
+1. Bei einem new reserviert die JVM Speicher für die Objektvariablen.
+2. Klassen-/Objektvariablen werden genullt (besitzen noch keinen Wert).
+3. Der Konstruktor der Oberklasse wird durch super() aufgerufen.
+4. Der Konstruktor initialisiert die Objektvariablen.
+
+In Spring haben die Objekte einen deutlich komplexeren Lebenszyklus.
+
+Folgendes Beispiel zeigt die Abfolge der Initialisierung bei Spring:
+@ShellComponent
+public class FsCommands {
+    private final Logger log = LoggerFactory.getLogger( getClass() );
+
+    @Autowired private FileSystem fs;
+
+    public FsCommands {
+        if (fs.getFreeDiskSpace() < 1_000_000 )
+            log.info( "Low disk space!" );
+    }
+    // ...
+}
+Was wird passieren?
+-> Es erfolgt ein Fehler (NullPointerException).
+- Es werden erst die Objekte per Konstruktor aufgebaut.
+- Erst später erfolgt der Aufbau der Komponenten per Autowired. Daher kann der Konstruktor noch nicht auf die Variable
+fs zugreifen, da sie per Autowired erst später aufgebaut wird.
+-> Constructor-Injection könnte das Problem lösen.
+
+Bean-Initialisierung bei Spring
+Bei der Initialisierung gibt es eine Reihenfolge:
+1. Spring baut das Objekt über den Konstruktor auf.
+2. Danach wird die Injizierung vorgenommen.
+
+
+Lifecycle Callbacks
+Eine Bean kann einen Lebenszyklus haben, der vom Container betrachtet wird.
+- Beim Erzeugen kann man eine eigene Initialisierung laufen lassen, beim Entfernen der Spring-managed Bean aus dem
+Kontext eine Abräumoperation.
+- Das sind spezielle Methoden, die beim Aufbau der Komponente aufgerufen werden können.
+
+
+@PostConstruct und @PreDestroy
+Spring unterstützt die Lebenszyklus-Annotationen @PostConstruct und @PreDestroy.
+- Spring Boot referenziert die Jakarta Annotations API über die Maven Dependency javax.annotation:javax.annotation-api.
+
+- @PostConstruct: Wird für eine Methode verwendet, die nach der Dependency-Injection aufgerufen wird, um eine
+Initialisierung durchzuführen.
+- @PreDestroy: Wird für Methoden verwendet, die im Allgemeinen Ressourcen freigeben, bevor die Spring-managed Bean
+vom Container entfernt wird.
+Diese Methoden:
+- haben keine Parameter
+- sind Objektmethoden (nicht statisch)
+- liefern nichts zurück, void
+- lösen keine geprüften Ausnahmen aus
+- können beliebige Sichtbarkeiten haben
+
+
+Vorheriges Beispiel mit @PostConstruct
+@ShellComponent
+public class FsCommands {
+    private final Logger log = LoggerFactory.getLogger( getClass() );
+
+    @Autowired private FileSystem fs;
+
+    @PostConstruct
+    public void checkDiskSpace() {
+        if (fs.getFreeDiskSpace() < 1_000_000 )
+            log.info( "Low disk space!" );
+    }
+    // ...
+}
+Diesmal wird anstatt des Konstruktors eine Methode für die Überprüfung des Speicherplatzes genutzt, welche die
+Annotation @PostConstruct nutzt.
+Da diese Methode durch @PostConstruct erst nach @Autowired aufgerufen wird, kann die Methode von fs nun aufgerufen
+werden.
+
+-> Diese @PostConstruct ist in einigen Fällen ungünstig, wenn ich z.B. diese Komponente teste, dann stellt sich die
+Frage, ob diese @PostConstruct Methode von uns manuell aufgerufen werden muss oder nicht, weil sie vielleicht nur ein
+Extra ist.
+-> Deshalb wird allgemein nicht mit @PostConstruct gearbeitet, sondern würde in dem Fall lieber Constructor-Injection
+zur Injizierung des FileSystem nutzen.
+
+Es gibt gewisse Anwendungsfälle, bei denen @PostConstructor Sinn machen kann.
+
+
+@PreDestroy
+Diese Methode wird immer dann ausgeführt, wenn der Container diese gewählte Komponente entfernen möchte.
+Dann kann auch ein Lebenszyklus Callback registriert werden.
+Technisch funktioniert das mit sogenannten Shutdown-Hooks. Sie lassen sich mit runnable anmelden und darüber kann man
+dann beliebigen Programmcode abarbeiten lassen, wenn die Virtual Machine korrekt herunterfährt.
+Spring meldet automatisch einen Shutdown-Hook an und dort laufen dann solche Abräumarbeiten (Callbacks) mit @PreDestroy.
+-> Das heißt also, dass wir damit eine Methode annotieren können, die ganz zum Schluss ausgeführt werden soll, bevor
+diese Bean zerstört wird.
+
+
+Beide Methoden @PostConstruct und @PreDestroy können vererbt werden oder von Schnittstellen implementiert werden.
+
+
+Früher, vor etwa 10 Jahren, gab es noch keine @PostConstruct und @PreDestroy Annotationen, daher wurden dafür bestimmte
+Schnittstellen genutzt:
+- InitializingBean und DisposableBean
+Da diese Art und Weise heute veraltet ist und nicht mehr genutzt wird, werde ich mir die Erklärung hier sparen.
+(Kurs: Kapitel 25 Bonus: Lebenszyklus der Beans Teil 2)
+
+
