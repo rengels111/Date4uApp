@@ -10,9 +10,9 @@ public class Date4uApplication {
     public static void main(String[] args) {
         ApplicationContext ctx = SpringApplication.run(Date4uApplication.class, args);
 
-        for (String name : ctx.getBeanDefinitionNames()) {
-            System.out.println(name);
-        }
+//        for (String name : ctx.getBeanDefinitionNames()) {
+//            System.out.println(name);
+//        }
 
 
         // Wir können aus ctx direkt unsere FileSystem Klasse herausholen.
