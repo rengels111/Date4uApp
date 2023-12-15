@@ -36,18 +36,29 @@ public class FileSystem {
     // soll etwas von einer Datei laden:
     public byte[] load(String filename) {
         try {
-            return Files.readAllBytes(root.resolve(filename));
+            Path path = resolve(filename);
+            return Files.readAllBytes(path);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     // soll bytes in einer Datei speichern:
+
     public void store(String filename, byte[] bytes) {
         try {
-            Files.write(root.resolve(filename), bytes);
+            Files.write(resolve(filename), bytes);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    // Methode erstellt, nachdem im Test festgestellt wurde, dass auf sensible Inhalte auf der Festplatte zugegriffen
+    // werden konnte:
+    private Path resolve(String filename) {
+        Path path = root.resolve(filename).toAbsolutePath().normalize();
+        if (!path.startsWith(root))
+            throw new SecurityException("Access to " + path + " denied");
+        return path;
     }
 }
