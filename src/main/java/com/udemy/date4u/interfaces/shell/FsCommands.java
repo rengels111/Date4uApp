@@ -3,11 +3,13 @@ package com.udemy.date4u.interfaces.shell;
 import com.udemy.date4u.configuration.Date4uProperties;
 import com.udemy.date4u.core.FileSystem;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.Environment;
+import org.springframework.cglib.core.Converter;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
+import org.springframework.stereotype.Component;
 import org.springframework.util.unit.DataSize;
+
+import java.nio.file.Path;
 
 // Wir bauen uns eine Klasse, um per Konsole (Shell) mit dem laufenden Programm zu interagieren.
 
@@ -84,4 +86,9 @@ public class FsCommands {
     }
      */
 
+    @ShellMethod("Display if a path exists")
+    public boolean exists(Path path) {
+        System.out.println(path);
+        return true;
+    }
 }
