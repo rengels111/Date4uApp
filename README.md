@@ -9,8 +9,10 @@ The following commands can be executed with the Spring Shell:
 - Show photo
 - Upload photo
 
+Main functions for now:
 - Photos can be uploaded
 - Favicons will be created
 
+Tests:
 - File system tests are integrated
 - Photo service tests are integrated
